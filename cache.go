@@ -255,6 +255,12 @@ func (c *Cache[K, V]) Evict(n int) (evicted int) {
 		c.setTimer()
 	}
 
+	if c.head == nil { // Stop timer if cache is empty
+		select {
+		case c.stop <- struct{}{}:
+		}
+	}
+
 	c.m.Unlock()
 
 	return
