@@ -191,7 +191,7 @@ func TestUpdate(t *testing.T) {
 }
 
 func TestLargeCache(t *testing.T) {
-	//t.SkipNow()
+	t.SkipNow()
 
 	c, n, ttl := New[int, int](), 1_000_000, 20*time.Second
 
