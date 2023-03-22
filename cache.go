@@ -94,6 +94,23 @@ func (c *Cache[K, V]) Get(key K) (V, bool) {
 	return value.Value, ok
 }
 
+// GetMany returns key/value pairs as a map. Will not return non-existing keys/expired values.
+func (c *Cache[K, V]) GetMany(keys ...K) map[K]V {
+	values := make(map[K]V)
+
+	c.m.RLock()
+
+	for k := range keys {
+		if v, ok := c.cache[keys[k]]; ok {
+			values[keys[k]] = v.Value
+		}
+	}
+
+	c.m.RUnlock()
+
+	return values
+}
+
 // Swap sets the new value returning the old one. Will return false if key is not found.
 func (c *Cache[K, V]) Swap(key K, value V) (V, bool) {
 	c.m.Lock()
@@ -262,6 +279,24 @@ func (c *Cache[K, V]) Range(fn func(K, V) bool) {
 			break
 		}
 	}
+}
+
+// Rekey replaces value's key. Returns false if the old key is not present.
+func (c *Cache[K, V]) Rekey(oldKey, newKey K) bool {
+	c.m.Lock()
+
+	item, ok := c.cache[oldKey]
+	if !ok {
+		c.m.Unlock()
+		return false
+	}
+
+	c.cache[newKey] = item
+	delete(c.cache, oldKey)
+
+	c.m.Unlock()
+
+	return true
 }
 
 // Len returns number of items currently stored in the cache.

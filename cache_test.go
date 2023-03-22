@@ -290,6 +290,18 @@ func TestRange(t *testing.T) {
 	require.Equal(t, []int{1, 2}, seen)
 }
 
+func TestGetMany(t *testing.T) {
+	c := New[int, string]()
+
+	c.Set(1, "1", 50*time.Millisecond)
+	c.Set(2, "2", 50*time.Millisecond)
+	c.Set(3, "3", 50*time.Millisecond)
+	c.Set(4, "4", 50*time.Millisecond)
+	c.Set(5, "5", 50*time.Millisecond)
+
+	require.Equal(t, map[int]string{1: "1", 3: "3", 5: "5"}, c.GetMany(5, 3, 1))
+}
+
 func BenchmarkCache(b *testing.B) {
 	c := New[int, int]()
 
