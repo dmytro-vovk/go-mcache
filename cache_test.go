@@ -263,6 +263,9 @@ func TestEvict(t *testing.T) {
 	require.Equal(t, 1, c.Evict(2))
 
 	require.Equal(t, 0, c.Len())
+
+	c.Set(10, 10, 100*time.Millisecond)
+	c.Evict(1)
 }
 
 func TestRange(t *testing.T) {

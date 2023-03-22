@@ -248,18 +248,16 @@ func (c *Cache[K, V]) Refresh(key K, ttl time.Duration) bool {
 func (c *Cache[K, V]) Evict(n int) (evicted int) {
 	c.m.Lock()
 
+	select {
+	case c.stop <- struct{}{}:
+	default:
+	}
+
 	for evicted = 0; evicted < n && c.head != nil && c.delete(c.head.Key); evicted++ {
 	}
 
 	if evicted > 0 && c.head != nil {
 		c.setTimer()
-	}
-
-	if c.head == nil { // Stop timer if cache is empty
-		select {
-		case c.stop <- struct{}{}:
-		default:
-		}
 	}
 
 	c.m.Unlock()
