@@ -290,6 +290,21 @@ func TestRange(t *testing.T) {
 	require.Equal(t, []int{1, 2}, seen)
 }
 
+func TestRekey(t *testing.T) {
+	c := New[string, bool]()
+
+	c.Set("foo", true, 10*time.Millisecond)
+	require.True(t, c.Rekey("foo", "bar"))
+	if v, ok := c.Get("bar"); assert.True(t, ok) {
+		require.True(t, v)
+	}
+
+	_, ok := c.Get("foo")
+	require.False(t, ok)
+
+	require.False(t, c.Rekey("non-existing", "new key"))
+}
+
 func TestGetMany(t *testing.T) {
 	c := New[int, string]()
 
