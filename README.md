@@ -1,5 +1,6 @@
 # go-mcache
 [![.github/workflows/ci.yaml](https://github.com/dmytro-vovk/go-mcache/actions/workflows/ci.yaml/badge.svg)](https://github.com/dmytro-vovk/go-mcache/actions/workflows/ci.yaml)
+[![Coverage Status](https://coveralls.io/repos/github/dmytro-vovk/go-mcache/badge.svg)](https://coveralls.io/github/dmytro-vovk/go-mcache)
 [![Go Report Card](https://goreportcard.com/badge/github.com/dmytro-vovk/go-mcache)](https://goreportcard.com/report/github.com/dmytro-vovk/go-mcache)
 [![Reference](https://pkg.go.dev/badge/github.com/dmytro-vovk/go-mcache.svg)](https://pkg.go.dev/github.com/dmytro-vovk/go-mcache)
 
