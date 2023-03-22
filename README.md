@@ -1,6 +1,7 @@
-[![.github/workflows/ci.yaml](https://github.com/dmytro-vovk/go-mcache/actions/workflows/ci.yaml/badge.svg)](https://github.com/dmytro-vovk/go-mcache/actions/workflows/ci.yaml)
-
 # go-mcache
+[![.github/workflows/ci.yaml](https://github.com/dmytro-vovk/go-mcache/actions/workflows/ci.yaml/badge.svg)](https://github.com/dmytro-vovk/go-mcache/actions/workflows/ci.yaml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/dmytro-vovk/go-mcache)](https://goreportcard.com/report/github.com/dmytro-vovk/go-mcache)
+[![Reference](https://pkg.go.dev/badge/github.com/dmytro-vovk/go-mcache.svg)](https://pkg.go.dev/github.com/dmytro-vovk/go-mcache)
 
 Yet another in-memory cache library with expiration.
 

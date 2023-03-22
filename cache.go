@@ -26,6 +26,7 @@ type item[K comparable] struct {
 	Expires time.Time
 }
 
+// New creates a news cache instance, using any comparable type for keys, and any type for values.
 func New[K comparable, V any]() *Cache[K, V] {
 	return &Cache[K, V]{
 		cache: make(map[K]valuePtr[K, V]),
@@ -151,7 +152,7 @@ func (c *Cache[K, V]) GetAndDelete(key K) (V, bool) {
 	return value.Value, true
 }
 
-// Update sets new value for key without changing TTL, return false if key not found.
+// Update sets new value for key without changing TTL, returning false if key not found.
 func (c *Cache[K, V]) Update(key K, value V) bool {
 	c.m.Lock()
 
