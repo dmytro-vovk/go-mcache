@@ -1,3 +1,5 @@
+[![.github/workflows/ci.yaml](https://github.com/dmytro-vovk/go-mcache/actions/workflows/ci.yaml/badge.svg)](https://github.com/dmytro-vovk/go-mcache/actions/workflows/ci.yaml)
+
 # go-mcache
 
 Yet another in-memory cache library with expiration.
