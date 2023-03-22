@@ -41,6 +41,7 @@ func TestCache(t *testing.T) {
 		_, ok := c.Get(1)
 		return !ok
 	}, 130*time.Millisecond, 20*time.Millisecond)
+
 	assert.Eventually(t, func() bool {
 		return 0 == c.Len()
 	}, 1100*time.Millisecond, 20*time.Millisecond)
@@ -53,10 +54,15 @@ func TestReplace(t *testing.T) {
 	if v, ok := c.Get(1); assert.True(t, ok) {
 		assert.Equal(t, "foo", v)
 	}
+
 	c.Set(1, "bar", time.Second)
 	if v, ok := c.Get(1); assert.True(t, ok) {
 		assert.Equal(t, "bar", v)
 	}
+
+	assert.Eventually(t, func() bool {
+		return 0 == c.Len()
+	}, 2*time.Second, 20*time.Millisecond)
 }
 
 func TestDelete(t *testing.T) {
@@ -90,6 +96,10 @@ func TestDelete(t *testing.T) {
 
 	_, ok = c.GetAndDelete(999)
 	assert.False(t, ok)
+
+	assert.Eventually(t, func() bool {
+		return 0 == c.Len()
+	}, 2*time.Second, 20*time.Millisecond)
 }
 
 func TestOrder(t *testing.T) {
