@@ -76,3 +76,16 @@ if _, ok := c.Get("gone fast"); !ok {
     fmt.Print("the value is gone!")
 }
 ```
+## Benchmarks
+```
+goos: darwin
+goarch: amd64
+pkg: github.com/dmytro-vovk/go-mcache
+cpu: Intel(R) Core(TM) i9-8950HK CPU @ 2.90GHz
+BenchmarkCacheSet
+BenchmarkCacheSet-12       	 2389052	       485.8 ns/op	     243 B/op	       2 allocs/op
+BenchmarkCacheGet
+BenchmarkCacheGet-12       	72900222	        15.56 ns/op	       2 B/op	       0 allocs/op
+BenchmarkCacheAddGet
+BenchmarkCacheAddGet-12    	  781284	      1662 ns/op	     607 B/op	      10 allocs/op
+```

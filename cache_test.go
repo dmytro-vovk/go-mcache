@@ -263,6 +263,9 @@ func TestEvict(t *testing.T) {
 	require.Equal(t, 1, c.Evict(2))
 
 	require.Equal(t, 0, c.Len())
+
+	c.Set(10, 10, 100*time.Millisecond)
+	c.Evict(1)
 }
 
 func TestRange(t *testing.T) {
@@ -317,14 +320,14 @@ func TestGetMany(t *testing.T) {
 	require.Equal(t, map[int]string{1: "1", 3: "3", 5: "5"}, c.GetMany(5, 3, 1))
 }
 
-func BenchmarkCache(b *testing.B) {
+func BenchmarkCacheSet(b *testing.B) {
 	c := New[int, int]()
 
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		c.Set(i, i, time.Second)
+		c.Set(i, i, 50*time.Millisecond)
 	}
 }
 
@@ -341,6 +344,9 @@ func BenchmarkCacheGet(b *testing.B) {
 			b.Fail()
 		}
 	}
+
+	b.StopTimer()
+	c.Evict(1)
 }
 
 // BenchmarkCacheAddGet-12    	  761462	      1642 ns/op	     281 B/op	       5 allocs/op
@@ -353,7 +359,7 @@ func BenchmarkCacheAddGet(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		c.Set(i, i, time.Minute)
+		c.Set(i, i, 50*time.Millisecond)
 
 		if n, ok := c.Get(i); !(ok && n == i) {
 			b.Fail()
