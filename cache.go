@@ -243,6 +243,27 @@ func (c *Cache[K, V]) Evict(n int) (evicted int) {
 	return
 }
 
+// Range iterates over key/value pairs using supplied function until it returns false.
+// Values are provided in the order of eviction. It is safe to manipulate the cache within the function.
+func (c *Cache[K, V]) Range(fn func(K, V) bool) {
+	c.m.RLock()
+	keys := make([]K, 0, len(c.cache))
+	for n := c.head; n != nil; n = n.Next {
+		keys = append(keys, n.Key)
+	}
+	c.m.RUnlock()
+
+	for k := range keys {
+		c.m.RLock()
+		value := c.cache[keys[k]].Value
+		c.m.RUnlock()
+
+		if !fn(keys[k], value) {
+			break
+		}
+	}
+}
+
 // Len returns number of items currently stored in the cache.
 func (c *Cache[K, V]) Len() int {
 	c.m.RLock()

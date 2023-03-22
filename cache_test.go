@@ -50,28 +50,28 @@ func TestCache(t *testing.T) {
 func TestReplace(t *testing.T) {
 	c := New[int, string]()
 
-	c.Set(1, "foo", time.Second)
+	c.Set(1, "foo", 50*time.Millisecond)
 	if v, ok := c.Get(1); assert.True(t, ok) {
 		assert.Equal(t, "foo", v)
 	}
 
-	c.Set(1, "bar", time.Second)
+	c.Set(1, "bar", 50*time.Millisecond)
 	if v, ok := c.Get(1); assert.True(t, ok) {
 		assert.Equal(t, "bar", v)
 	}
 
 	assert.Eventually(t, func() bool {
 		return 0 == c.Len()
-	}, 2*time.Second, 20*time.Millisecond)
+	}, 100*time.Millisecond, 20*time.Millisecond)
 }
 
 func TestDelete(t *testing.T) {
 	c := New[int, int]()
 
-	c.Set(1, 1, time.Second)
-	c.Set(2, 2, time.Second)
-	c.Set(3, 3, time.Second)
-	c.Set(4, 4, time.Second)
+	c.Set(1, 1, 50*time.Millisecond)
+	c.Set(2, 2, 50*time.Millisecond)
+	c.Set(3, 3, 50*time.Millisecond)
+	c.Set(4, 4, 50*time.Millisecond)
 
 	_, ok := c.Get(3)
 	assert.True(t, ok)
@@ -99,7 +99,7 @@ func TestDelete(t *testing.T) {
 
 	assert.Eventually(t, func() bool {
 		return 0 == c.Len()
-	}, 2*time.Second, 20*time.Millisecond)
+	}, 100*time.Millisecond, 20*time.Millisecond)
 }
 
 func TestOrder(t *testing.T) {
@@ -263,6 +263,31 @@ func TestEvict(t *testing.T) {
 	require.Equal(t, 1, c.Evict(2))
 
 	require.Equal(t, 0, c.Len())
+}
+
+func TestRange(t *testing.T) {
+	c := New[int, int]()
+
+	c.Set(1, 1, 50*time.Millisecond)
+	c.Set(2, 2, 50*time.Millisecond)
+	c.Set(3, 3, 50*time.Millisecond)
+
+	var seen []int
+	c.Range(func(k int, v int) bool {
+		assert.Equal(t, k, v)
+		seen = append(seen, k)
+		return true
+	})
+
+	require.Equal(t, []int{1, 2, 3}, seen)
+
+	seen = []int{}
+	c.Range(func(k int, v int) bool {
+		seen = append(seen, k)
+		return v != 2
+	})
+
+	require.Equal(t, []int{1, 2}, seen)
 }
 
 func BenchmarkCache(b *testing.B) {
