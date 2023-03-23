@@ -76,6 +76,9 @@ if _, ok := c.Get("gone fast"); !ok {
     fmt.Print("the value is gone!")
 }
 ```
+
+See [examples](examples) directory for more.
+
 ## Benchmarks
 ```
 goos: darwin
