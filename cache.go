@@ -325,10 +325,7 @@ func (c *Cache[K, V]) ticker(t *time.Timer) {
 	select {
 	case <-t.C:
 	case <-c.stop:
-		if !t.Stop() {
-			<-t.C
-		}
-
+		t.Stop()
 		return
 	}
 
