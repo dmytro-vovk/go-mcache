@@ -1,9 +1,10 @@
-package mcache
+package mcache_test
 
 import (
 	"testing"
 	"time"
 
+	"github.com/dmytro-vovk/go-mcache"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
@@ -14,7 +15,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestCache(t *testing.T) {
-	c := New[int, int]()
+	c := mcache.New[int, int]()
 
 	assert.Zero(t, c.Len())
 
@@ -48,7 +49,7 @@ func TestCache(t *testing.T) {
 }
 
 func TestReplace(t *testing.T) {
-	c := New[int, string]()
+	c := mcache.New[int, string]()
 
 	c.Set(1, "foo", 50*time.Millisecond)
 	if v, ok := c.Get(1); assert.True(t, ok) {
@@ -66,7 +67,7 @@ func TestReplace(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	c := New[int, int]()
+	c := mcache.New[int, int]()
 
 	c.Set(1, 1, 50*time.Millisecond)
 	c.Set(2, 2, 50*time.Millisecond)
@@ -103,7 +104,7 @@ func TestDelete(t *testing.T) {
 }
 
 func TestOrder(t *testing.T) {
-	c := New[int, int]()
+	c := mcache.New[int, int]()
 
 	c.Set(1, 1, 100*time.Millisecond)
 	c.Set(2, 2, 200*time.Millisecond)
@@ -125,7 +126,7 @@ func TestOrder(t *testing.T) {
 }
 
 func TestOrder2(t *testing.T) {
-	c := New[int, int]()
+	c := mcache.New[int, int]()
 
 	c.Set(2, 2, 200*time.Millisecond)
 	c.Set(1, 1, 100*time.Millisecond)
@@ -147,7 +148,7 @@ func TestOrder2(t *testing.T) {
 }
 
 func TestOrder3(t *testing.T) {
-	c := New[int, int]()
+	c := mcache.New[int, int]()
 
 	c.Set(2, 2, 200*time.Millisecond)
 	c.Set(3, 3, 300*time.Millisecond)
@@ -170,7 +171,7 @@ func TestOrder3(t *testing.T) {
 }
 
 func TestRefresh(t *testing.T) {
-	c := New[int, int]()
+	c := mcache.New[int, int]()
 
 	c.Set(1, 1, 100*time.Millisecond)
 	c.Set(2, 2, 200*time.Millisecond)
@@ -192,7 +193,7 @@ func TestRefresh(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
-	c := New[string, string]()
+	c := mcache.New[string, string]()
 
 	c.Set("a", "foo", 20*time.Millisecond)
 	assert.True(t, c.Update("a", "bar"))
@@ -203,7 +204,7 @@ func TestUpdate(t *testing.T) {
 func TestLargeCache(t *testing.T) {
 	t.SkipNow()
 
-	c, n, ttl := New[int, int](), 1_000_000, 20*time.Second
+	c, n, ttl := mcache.New[int, int](), 1_000_000, 20*time.Second
 
 	for i := 0; i < n; i++ {
 		c.Set(i, i, ttl)
@@ -229,7 +230,7 @@ func TestLargeCache(t *testing.T) {
 }
 
 func TestSwap(t *testing.T) {
-	c := New[int, int]()
+	c := mcache.New[int, int]()
 
 	c.Set(1, 100, 50*time.Millisecond)
 
@@ -248,7 +249,7 @@ func TestSwap(t *testing.T) {
 }
 
 func TestEvict(t *testing.T) {
-	c := New[int, int]()
+	c := mcache.New[int, int]()
 
 	c.Set(1, 1, 50*time.Millisecond)
 	c.Set(2, 2, 50*time.Millisecond)
@@ -269,7 +270,7 @@ func TestEvict(t *testing.T) {
 }
 
 func TestRange(t *testing.T) {
-	c := New[int, int]()
+	c := mcache.New[int, int]()
 
 	c.Set(1, 1, 50*time.Millisecond)
 	c.Set(2, 2, 50*time.Millisecond)
@@ -294,7 +295,7 @@ func TestRange(t *testing.T) {
 }
 
 func TestRekey(t *testing.T) {
-	c := New[string, bool]()
+	c := mcache.New[string, bool]()
 
 	c.Set("foo", true, 10*time.Millisecond)
 	require.True(t, c.Rekey("foo", "bar"))
@@ -309,7 +310,7 @@ func TestRekey(t *testing.T) {
 }
 
 func TestGetMany(t *testing.T) {
-	c := New[int, string]()
+	c := mcache.New[int, string]()
 
 	c.Set(1, "1", 50*time.Millisecond)
 	c.Set(2, "2", 50*time.Millisecond)
@@ -321,7 +322,7 @@ func TestGetMany(t *testing.T) {
 }
 
 func BenchmarkCacheSet(b *testing.B) {
-	c := New[int, int]()
+	c := mcache.New[int, int]()
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -332,7 +333,7 @@ func BenchmarkCacheSet(b *testing.B) {
 }
 
 func BenchmarkCacheGet(b *testing.B) {
-	c := New[int, int]()
+	c := mcache.New[int, int]()
 
 	c.Set(1, 1, 5*time.Second)
 
@@ -349,11 +350,8 @@ func BenchmarkCacheGet(b *testing.B) {
 	c.Evict(1)
 }
 
-// BenchmarkCacheAddGet-12    	  761462	      1642 ns/op	     281 B/op	       5 allocs/op
-// BenchmarkCacheAddGet-12    	  681804	      1619 ns/op	     280 B/op	       5 allocs/op
-// BenchmarkCacheAddGet-12    	  794340	      1627 ns/op	     281 B/op	       5 allocs/op
 func BenchmarkCacheAddGet(b *testing.B) {
-	c := New[int, int]()
+	c := mcache.New[int, int]()
 
 	b.ReportAllocs()
 	b.ResetTimer()
