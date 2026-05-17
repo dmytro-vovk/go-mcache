@@ -192,13 +192,49 @@ func TestRefresh(t *testing.T) {
 	}, 3500*time.Millisecond, 20*time.Millisecond)
 }
 
+func TestRefreshSingleItem(t *testing.T) {
+	t.Run("longer TTL", func(t *testing.T) {
+		c := mcache.New[int, int]()
+		c.Set(1, 1, 30*time.Millisecond)
+
+		assert.True(t, c.Refresh(1, 200*time.Millisecond))
+
+		if v, ok := c.Get(1); assert.True(t, ok) {
+			assert.Equal(t, 1, v)
+		}
+		assert.Equal(t, 1, c.Len())
+
+		assert.Eventually(t, func() bool {
+			return 0 == c.Len()
+		}, 300*time.Millisecond, 10*time.Millisecond)
+	})
+
+	t.Run("shorter TTL", func(t *testing.T) {
+		c := mcache.New[int, int]()
+		c.Set(1, 1, 200*time.Millisecond)
+
+		assert.True(t, c.Refresh(1, 30*time.Millisecond))
+
+		assert.Eventually(t, func() bool {
+			return 0 == c.Len()
+		}, 120*time.Millisecond, 10*time.Millisecond)
+	})
+}
+
 func TestUpdate(t *testing.T) {
 	c := mcache.New[string, string]()
 
 	c.Set("a", "foo", 20*time.Millisecond)
 	assert.True(t, c.Update("a", "bar"))
+
+	if v, ok := c.Get("a"); assert.True(t, ok) {
+		assert.Equal(t, "bar", v)
+	}
+
 	assert.False(t, c.Update("x", "bar"))
 
+	_, ok := c.Get("x")
+	assert.False(t, ok)
 }
 
 func TestLargeCache(t *testing.T) {
@@ -307,6 +343,73 @@ func TestRekey(t *testing.T) {
 	require.False(t, ok)
 
 	require.False(t, c.Rekey("non-existing", "new key"))
+}
+
+func TestRekeyExpires(t *testing.T) {
+	c := mcache.New[string, bool]()
+
+	c.Set("foo", true, 30*time.Millisecond)
+	require.True(t, c.Rekey("foo", "bar"))
+
+	if v, ok := c.Get("bar"); assert.True(t, ok) {
+		assert.True(t, v)
+	}
+
+	// The rekeyed entry must still expire on its original TTL.
+	assert.Eventually(t, func() bool {
+		return 0 == c.Len()
+	}, 200*time.Millisecond, 10*time.Millisecond)
+}
+
+func TestRekeyOntoExisting(t *testing.T) {
+	c := mcache.New[int, int]()
+
+	c.Set(1, 100, 30*time.Millisecond)
+	c.Set(2, 200, 500*time.Millisecond)
+
+	require.True(t, c.Rekey(1, 2)) // key 2 already exists and is displaced
+
+	require.Equal(t, 1, c.Len())
+	if v, ok := c.Get(2); assert.True(t, ok) {
+		assert.Equal(t, 100, v) // value/TTL come from old key 1
+	}
+
+	_, ok := c.Get(1)
+	assert.False(t, ok)
+
+	// Surviving entry keeps key 1's short TTL; no orphaned queue node.
+	assert.Eventually(t, func() bool {
+		return 0 == c.Len()
+	}, 150*time.Millisecond, 10*time.Millisecond)
+}
+
+func TestTimerNoLeakOnReschedule(t *testing.T) {
+	c := mcache.New[int, int]()
+
+	c.Set(1, 1, time.Hour)
+	require.True(t, c.Refresh(1, time.Hour)) // reschedules the only item
+	require.True(t, c.Delete(1))             // cache now empty
+
+	require.Zero(t, c.Len())
+	// goleak (TestMain) must not find a lingering hour-long timer goroutine.
+}
+
+func TestNoPrematureEviction(t *testing.T) {
+	c := mcache.New[int, int]()
+
+	c.Set(-1, -1, time.Hour) // sentinel: long TTL, must never be evicted early
+
+	for i := 0; i < 500; i++ {
+		c.Set(i, i, 5*time.Millisecond)
+		c.Delete(i)
+	}
+
+	time.Sleep(100 * time.Millisecond) // long past the 5ms churn
+
+	if v, ok := c.Get(-1); assert.True(t, ok, "sentinel evicted before its TTL") {
+		assert.Equal(t, -1, v)
+	}
+	assert.Equal(t, 1, c.Len())
 }
 
 func TestGetMany(t *testing.T) {

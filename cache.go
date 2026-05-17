@@ -9,7 +9,7 @@ type Cache[K comparable, V any] struct {
 	cache map[K]valuePtr[K, V] // Cached items
 	head  *item[K]             // The earliest item to evict, head of the queue
 	tail  *item[K]             // The latest item to evict
-	stop  chan struct{}        // The way to stop the timer
+	timer *time.Timer          // Single expiry timer for the head item
 	m     sync.RWMutex
 }
 
@@ -26,15 +26,14 @@ type item[K comparable] struct {
 	Expires time.Time
 }
 
-// New creates a news cache instance, using any comparable type for keys, and any type for values.
+// New creates a new cache instance, using any comparable type for keys and any type for values.
 func New[K comparable, V any]() *Cache[K, V] {
 	return &Cache[K, V]{
 		cache: make(map[K]valuePtr[K, V]),
-		stop:  make(chan struct{}),
 	}
 }
 
-// Set adds or replaces a value with key and given TTL.
+// Set adds or replaces the value for key with the given TTL.
 func (c *Cache[K, V]) Set(key K, value V, ttl time.Duration) {
 	c.m.Lock()
 
@@ -83,7 +82,7 @@ func (c *Cache[K, V]) Set(key K, value V, ttl time.Duration) {
 	c.m.Unlock()
 }
 
-// Get returns value and true, if key exists, of zero value and false if not found.
+// Get returns the value and true if the key exists, or the zero value and false if not.
 func (c *Cache[K, V]) Get(key K) (V, bool) {
 	c.m.RLock()
 
@@ -94,7 +93,7 @@ func (c *Cache[K, V]) Get(key K) (V, bool) {
 	return value.Value, ok
 }
 
-// GetMany returns key/value pairs as a map. Will not return non-existing keys/expired values.
+// GetMany returns key/value pairs as a map, omitting keys that are not present.
 func (c *Cache[K, V]) GetMany(keys ...K) map[K]V {
 	values := make(map[K]V)
 
@@ -111,7 +110,7 @@ func (c *Cache[K, V]) GetMany(keys ...K) map[K]V {
 	return values
 }
 
-// Swap sets the new value returning the old one. Will return false if key is not found.
+// Swap sets the new value without changing TTL and returns the old one, or false if the key is not found.
 func (c *Cache[K, V]) Swap(key K, value V) (V, bool) {
 	c.m.Lock()
 
@@ -134,7 +133,7 @@ func (c *Cache[K, V]) Swap(key K, value V) (V, bool) {
 	return oldValue, true
 }
 
-// Delete removes value from thr cache.
+// Delete removes the value for the given key, returning true if it was present.
 func (c *Cache[K, V]) Delete(key K) (ok bool) {
 	c.m.Lock()
 
@@ -142,8 +141,12 @@ func (c *Cache[K, V]) Delete(key K) (ok bool) {
 
 	ok = c.delete(key)
 
-	if c.head != nil && timerResetNeeded {
-		c.setTimer()
+	if c.head != nil {
+		if timerResetNeeded {
+			c.setTimer()
+		}
+	} else if ok && c.timer != nil {
+		c.timer.Stop()
 	}
 
 	c.m.Unlock()
@@ -151,7 +154,7 @@ func (c *Cache[K, V]) Delete(key K) (ok bool) {
 	return
 }
 
-// GetAndDelete returns value and true, and deletes the key if it was found, of zero value and false if the key not found.
+// GetAndDelete returns the value and true and removes the key if found, or the zero value and false if not.
 func (c *Cache[K, V]) GetAndDelete(key K) (V, bool) {
 	c.m.Lock()
 
@@ -169,7 +172,7 @@ func (c *Cache[K, V]) GetAndDelete(key K) (V, bool) {
 	return value.Value, true
 }
 
-// Update sets new value for key without changing TTL, returning false if key not found.
+// Update sets a new value for the key without changing TTL, returning false if the key is not found.
 func (c *Cache[K, V]) Update(key K, value V) bool {
 	c.m.Lock()
 
@@ -180,14 +183,17 @@ func (c *Cache[K, V]) Update(key K, value V) bool {
 		return false
 	}
 
-	v.Value = value
+	c.cache[key] = valuePtr[K, V]{
+		Value: value,
+		Ptr:   v.Ptr,
+	}
 
 	c.m.Unlock()
 
 	return true
 }
 
-// Refresh sets new TTL for the given key, returning true if the key (still) exists.
+// Refresh sets a new TTL for the given key, returning true if the key exists.
 func (c *Cache[K, V]) Refresh(key K, ttl time.Duration) bool {
 	c.m.Lock()
 
@@ -202,6 +208,16 @@ func (c *Cache[K, V]) Refresh(key K, ttl time.Duration) bool {
 	wasFirst := c.head.Key == key
 
 	start := c.remove(v.Ptr) // Remove the item from the queue to put into a new place
+
+	if start == nil { // It was the only item in the queue
+		v.Ptr.Expires = expires
+		c.head = v.Ptr
+		c.tail = v.Ptr
+		c.setTimer()
+		c.m.Unlock()
+
+		return true
+	}
 
 	if expires.After(v.Ptr.Expires) { // Move towards the tail
 		for n := start; ; n = n.Next {
@@ -248,16 +264,15 @@ func (c *Cache[K, V]) Refresh(key K, ttl time.Duration) bool {
 func (c *Cache[K, V]) Evict(n int) (evicted int) {
 	c.m.Lock()
 
-	select {
-	case c.stop <- struct{}{}:
-	default:
-	}
-
 	for evicted = 0; evicted < n && c.head != nil && c.delete(c.head.Key); evicted++ {
 	}
 
-	if evicted > 0 && c.head != nil {
-		c.setTimer()
+	if evicted > 0 {
+		if c.head != nil {
+			c.setTimer()
+		} else if c.timer != nil {
+			c.timer.Stop()
+		}
 	}
 
 	c.m.Unlock()
@@ -265,8 +280,9 @@ func (c *Cache[K, V]) Evict(n int) (evicted int) {
 	return
 }
 
-// Range iterates over key/value pairs using supplied function until it returns false.
-// Values are provided in the order of eviction. It is safe to manipulate the cache within the function.
+// Range calls fn for each key/value pair in eviction order until fn returns false.
+// The keys are captured up front, so it is safe to manipulate the cache from within
+// fn; a key removed before fn observes it yields the zero value.
 func (c *Cache[K, V]) Range(fn func(K, V) bool) {
 	c.m.RLock()
 	keys := make([]K, 0, len(c.cache))
@@ -290,13 +306,29 @@ func (c *Cache[K, V]) Range(fn func(K, V) bool) {
 func (c *Cache[K, V]) Rekey(oldKey, newKey K) bool {
 	c.m.Lock()
 
-	item, ok := c.cache[oldKey]
+	v, ok := c.cache[oldKey]
 	if !ok {
 		c.m.Unlock()
 		return false
 	}
 
-	c.cache[newKey] = item
+	if oldKey == newKey {
+		c.m.Unlock()
+		return true
+	}
+
+	if existing, ok := c.cache[newKey]; ok {
+		timerResetNeeded := c.head == existing.Ptr
+
+		c.remove(existing.Ptr)
+
+		if c.head != nil && timerResetNeeded {
+			c.setTimer()
+		}
+	}
+
+	v.Ptr.Key = newKey
+	c.cache[newKey] = v
 	delete(c.cache, oldKey)
 
 	c.m.Unlock()
@@ -304,7 +336,7 @@ func (c *Cache[K, V]) Rekey(oldKey, newKey K) bool {
 	return true
 }
 
-// Len returns number of items currently stored in the cache.
+// Len returns the number of items currently stored in the cache.
 func (c *Cache[K, V]) Len() int {
 	c.m.RLock()
 	defer c.m.RUnlock()
@@ -312,36 +344,39 @@ func (c *Cache[K, V]) Len() int {
 	return len(c.cache)
 }
 
+// setTimer (re)schedules the single expiry timer for the current head.
+// It must be called with c.m held and c.head != nil.
 func (c *Cache[K, V]) setTimer() {
-	select {
-	case c.stop <- struct{}{}:
-	default:
-	}
+	d := time.Until(c.head.Expires)
 
-	go c.ticker(time.NewTimer(time.Until(c.head.Expires)))
-}
+	if c.timer == nil {
+		c.timer = time.AfterFunc(d, c.onTimer)
 
-func (c *Cache[K, V]) ticker(t *time.Timer) {
-	select {
-	case <-t.C:
-	case <-c.stop:
-		t.Stop()
 		return
 	}
 
-	c.m.Lock()
+	c.timer.Reset(d)
+}
 
-	if c.head != nil {
+// onTimer evicts every item that has actually expired and reschedules for
+// the next one. It re-derives all work from live state, so a spurious or
+// stale wake-up (e.g. from a Reset/Stop race) only ever evicts truly
+// expired items and is otherwise a no-op.
+func (c *Cache[K, V]) onTimer() {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	now := time.Now()
+
+	for c.head != nil && !c.head.Expires.After(now) {
 		delete(c.cache, c.head.Key)
 
 		c.remove(c.head)
 	}
 
 	if c.head != nil {
-		c.setTimer()
+		c.timer.Reset(time.Until(c.head.Expires))
 	}
-
-	c.m.Unlock()
 }
 
 func (c *Cache[K, V]) delete(key K) bool {
