@@ -192,6 +192,35 @@ func TestRefresh(t *testing.T) {
 	}, 3500*time.Millisecond, 20*time.Millisecond)
 }
 
+func TestRefreshSingleItem(t *testing.T) {
+	t.Run("longer TTL", func(t *testing.T) {
+		c := mcache.New[int, int]()
+		c.Set(1, 1, 30*time.Millisecond)
+
+		assert.True(t, c.Refresh(1, 200*time.Millisecond))
+
+		if v, ok := c.Get(1); assert.True(t, ok) {
+			assert.Equal(t, 1, v)
+		}
+		assert.Equal(t, 1, c.Len())
+
+		assert.Eventually(t, func() bool {
+			return 0 == c.Len()
+		}, 300*time.Millisecond, 10*time.Millisecond)
+	})
+
+	t.Run("shorter TTL", func(t *testing.T) {
+		c := mcache.New[int, int]()
+		c.Set(1, 1, 200*time.Millisecond)
+
+		assert.True(t, c.Refresh(1, 30*time.Millisecond))
+
+		assert.Eventually(t, func() bool {
+			return 0 == c.Len()
+		}, 120*time.Millisecond, 10*time.Millisecond)
+	})
+}
+
 func TestUpdate(t *testing.T) {
 	c := mcache.New[string, string]()
 

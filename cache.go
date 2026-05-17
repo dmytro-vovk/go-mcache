@@ -206,6 +206,16 @@ func (c *Cache[K, V]) Refresh(key K, ttl time.Duration) bool {
 
 	start := c.remove(v.Ptr) // Remove the item from the queue to put into a new place
 
+	if start == nil { // It was the only item in the queue
+		v.Ptr.Expires = expires
+		c.head = v.Ptr
+		c.tail = v.Ptr
+		c.setTimer()
+		c.m.Unlock()
+
+		return true
+	}
+
 	if expires.After(v.Ptr.Expires) { // Move towards the tail
 		for n := start; ; n = n.Next {
 			if expires.Before(n.Expires) {
