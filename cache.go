@@ -26,14 +26,14 @@ type item[K comparable] struct {
 	Expires time.Time
 }
 
-// New creates a news cache instance, using any comparable type for keys, and any type for values.
+// New creates a new cache instance, using any comparable type for keys and any type for values.
 func New[K comparable, V any]() *Cache[K, V] {
 	return &Cache[K, V]{
 		cache: make(map[K]valuePtr[K, V]),
 	}
 }
 
-// Set adds or replaces a value with key and given TTL.
+// Set adds or replaces the value for key with the given TTL.
 func (c *Cache[K, V]) Set(key K, value V, ttl time.Duration) {
 	c.m.Lock()
 
@@ -82,7 +82,7 @@ func (c *Cache[K, V]) Set(key K, value V, ttl time.Duration) {
 	c.m.Unlock()
 }
 
-// Get returns value and true, if key exists, of zero value and false if not found.
+// Get returns the value and true if the key exists, or the zero value and false if not.
 func (c *Cache[K, V]) Get(key K) (V, bool) {
 	c.m.RLock()
 
@@ -93,7 +93,7 @@ func (c *Cache[K, V]) Get(key K) (V, bool) {
 	return value.Value, ok
 }
 
-// GetMany returns key/value pairs as a map. Will not return non-existing keys/expired values.
+// GetMany returns key/value pairs as a map, omitting keys that are not present.
 func (c *Cache[K, V]) GetMany(keys ...K) map[K]V {
 	values := make(map[K]V)
 
@@ -110,7 +110,7 @@ func (c *Cache[K, V]) GetMany(keys ...K) map[K]V {
 	return values
 }
 
-// Swap sets the new value returning the old one. Will return false if key is not found.
+// Swap sets the new value without changing TTL and returns the old one, or false if the key is not found.
 func (c *Cache[K, V]) Swap(key K, value V) (V, bool) {
 	c.m.Lock()
 
@@ -133,7 +133,7 @@ func (c *Cache[K, V]) Swap(key K, value V) (V, bool) {
 	return oldValue, true
 }
 
-// Delete removes value from thr cache.
+// Delete removes the value for the given key, returning true if it was present.
 func (c *Cache[K, V]) Delete(key K) (ok bool) {
 	c.m.Lock()
 
@@ -154,7 +154,7 @@ func (c *Cache[K, V]) Delete(key K) (ok bool) {
 	return
 }
 
-// GetAndDelete returns value and true, and deletes the key if it was found, of zero value and false if the key not found.
+// GetAndDelete returns the value and true and removes the key if found, or the zero value and false if not.
 func (c *Cache[K, V]) GetAndDelete(key K) (V, bool) {
 	c.m.Lock()
 
@@ -172,7 +172,7 @@ func (c *Cache[K, V]) GetAndDelete(key K) (V, bool) {
 	return value.Value, true
 }
 
-// Update sets new value for key without changing TTL, returning false if key not found.
+// Update sets a new value for the key without changing TTL, returning false if the key is not found.
 func (c *Cache[K, V]) Update(key K, value V) bool {
 	c.m.Lock()
 
@@ -193,7 +193,7 @@ func (c *Cache[K, V]) Update(key K, value V) bool {
 	return true
 }
 
-// Refresh sets new TTL for the given key, returning true if the key (still) exists.
+// Refresh sets a new TTL for the given key, returning true if the key exists.
 func (c *Cache[K, V]) Refresh(key K, ttl time.Duration) bool {
 	c.m.Lock()
 
@@ -280,8 +280,9 @@ func (c *Cache[K, V]) Evict(n int) (evicted int) {
 	return
 }
 
-// Range iterates over key/value pairs using supplied function until it returns false.
-// Values are provided in the order of eviction. It is safe to manipulate the cache within the function.
+// Range calls fn for each key/value pair in eviction order until fn returns false.
+// The keys are captured up front, so it is safe to manipulate the cache from within
+// fn; a key removed before fn observes it yields the zero value.
 func (c *Cache[K, V]) Range(fn func(K, V) bool) {
 	c.m.RLock()
 	keys := make([]K, 0, len(c.cache))
@@ -335,7 +336,7 @@ func (c *Cache[K, V]) Rekey(oldKey, newKey K) bool {
 	return true
 }
 
-// Len returns number of items currently stored in the cache.
+// Len returns the number of items currently stored in the cache.
 func (c *Cache[K, V]) Len() int {
 	c.m.RLock()
 	defer c.m.RUnlock()

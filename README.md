@@ -32,12 +32,12 @@ if value, ok := c.Get("one"); ok {
 }
 
 // Get value and delete it from the cache
-if value, ok := GetAndDelete("two"); ok {
+if value, ok := c.GetAndDelete("two"); ok {
     fmt.Printf("Got and deleted value: %v", value)
 }
 
 // Try getting non-existing value
-if _, ok := Get("two"); !ok {
+if _, ok := c.Get("two"); !ok {
     fmt.Print("Value no longer cached")
 }
 
