@@ -197,8 +197,15 @@ func TestUpdate(t *testing.T) {
 
 	c.Set("a", "foo", 20*time.Millisecond)
 	assert.True(t, c.Update("a", "bar"))
+
+	if v, ok := c.Get("a"); assert.True(t, ok) {
+		assert.Equal(t, "bar", v)
+	}
+
 	assert.False(t, c.Update("x", "bar"))
 
+	_, ok := c.Get("x")
+	assert.False(t, ok)
 }
 
 func TestLargeCache(t *testing.T) {

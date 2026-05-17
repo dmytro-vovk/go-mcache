@@ -180,7 +180,10 @@ func (c *Cache[K, V]) Update(key K, value V) bool {
 		return false
 	}
 
-	v.Value = value
+	c.cache[key] = valuePtr[K, V]{
+		Value: value,
+		Ptr:   v.Ptr,
+	}
 
 	c.m.Unlock()
 
