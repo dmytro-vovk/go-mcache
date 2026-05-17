@@ -345,6 +345,44 @@ func TestRekey(t *testing.T) {
 	require.False(t, c.Rekey("non-existing", "new key"))
 }
 
+func TestRekeyExpires(t *testing.T) {
+	c := mcache.New[string, bool]()
+
+	c.Set("foo", true, 30*time.Millisecond)
+	require.True(t, c.Rekey("foo", "bar"))
+
+	if v, ok := c.Get("bar"); assert.True(t, ok) {
+		assert.True(t, v)
+	}
+
+	// The rekeyed entry must still expire on its original TTL.
+	assert.Eventually(t, func() bool {
+		return 0 == c.Len()
+	}, 200*time.Millisecond, 10*time.Millisecond)
+}
+
+func TestRekeyOntoExisting(t *testing.T) {
+	c := mcache.New[int, int]()
+
+	c.Set(1, 100, 30*time.Millisecond)
+	c.Set(2, 200, 500*time.Millisecond)
+
+	require.True(t, c.Rekey(1, 2)) // key 2 already exists and is displaced
+
+	require.Equal(t, 1, c.Len())
+	if v, ok := c.Get(2); assert.True(t, ok) {
+		assert.Equal(t, 100, v) // value/TTL come from old key 1
+	}
+
+	_, ok := c.Get(1)
+	assert.False(t, ok)
+
+	// Surviving entry keeps key 1's short TTL; no orphaned queue node.
+	assert.Eventually(t, func() bool {
+		return 0 == c.Len()
+	}, 150*time.Millisecond, 10*time.Millisecond)
+}
+
 func TestGetMany(t *testing.T) {
 	c := mcache.New[int, string]()
 

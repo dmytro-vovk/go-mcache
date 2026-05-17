@@ -303,13 +303,29 @@ func (c *Cache[K, V]) Range(fn func(K, V) bool) {
 func (c *Cache[K, V]) Rekey(oldKey, newKey K) bool {
 	c.m.Lock()
 
-	item, ok := c.cache[oldKey]
+	v, ok := c.cache[oldKey]
 	if !ok {
 		c.m.Unlock()
 		return false
 	}
 
-	c.cache[newKey] = item
+	if oldKey == newKey {
+		c.m.Unlock()
+		return true
+	}
+
+	if existing, ok := c.cache[newKey]; ok {
+		timerResetNeeded := c.head == existing.Ptr
+
+		c.remove(existing.Ptr)
+
+		if c.head != nil && timerResetNeeded {
+			c.setTimer()
+		}
+	}
+
+	v.Ptr.Key = newKey
+	c.cache[newKey] = v
 	delete(c.cache, oldKey)
 
 	c.m.Unlock()
