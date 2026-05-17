@@ -383,6 +383,35 @@ func TestRekeyOntoExisting(t *testing.T) {
 	}, 150*time.Millisecond, 10*time.Millisecond)
 }
 
+func TestTimerNoLeakOnReschedule(t *testing.T) {
+	c := mcache.New[int, int]()
+
+	c.Set(1, 1, time.Hour)
+	require.True(t, c.Refresh(1, time.Hour)) // reschedules the only item
+	require.True(t, c.Delete(1))             // cache now empty
+
+	require.Zero(t, c.Len())
+	// goleak (TestMain) must not find a lingering hour-long timer goroutine.
+}
+
+func TestNoPrematureEviction(t *testing.T) {
+	c := mcache.New[int, int]()
+
+	c.Set(-1, -1, time.Hour) // sentinel: long TTL, must never be evicted early
+
+	for i := 0; i < 500; i++ {
+		c.Set(i, i, 5*time.Millisecond)
+		c.Delete(i)
+	}
+
+	time.Sleep(100 * time.Millisecond) // long past the 5ms churn
+
+	if v, ok := c.Get(-1); assert.True(t, ok, "sentinel evicted before its TTL") {
+		assert.Equal(t, -1, v)
+	}
+	assert.Equal(t, 1, c.Len())
+}
+
 func TestGetMany(t *testing.T) {
 	c := mcache.New[int, string]()
 

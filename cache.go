@@ -9,7 +9,7 @@ type Cache[K comparable, V any] struct {
 	cache map[K]valuePtr[K, V] // Cached items
 	head  *item[K]             // The earliest item to evict, head of the queue
 	tail  *item[K]             // The latest item to evict
-	stop  chan struct{}        // The way to stop the timer
+	timer *time.Timer          // Single expiry timer for the head item
 	m     sync.RWMutex
 }
 
@@ -30,7 +30,6 @@ type item[K comparable] struct {
 func New[K comparable, V any]() *Cache[K, V] {
 	return &Cache[K, V]{
 		cache: make(map[K]valuePtr[K, V]),
-		stop:  make(chan struct{}),
 	}
 }
 
@@ -142,8 +141,12 @@ func (c *Cache[K, V]) Delete(key K) (ok bool) {
 
 	ok = c.delete(key)
 
-	if c.head != nil && timerResetNeeded {
-		c.setTimer()
+	if c.head != nil {
+		if timerResetNeeded {
+			c.setTimer()
+		}
+	} else if ok && c.timer != nil {
+		c.timer.Stop()
 	}
 
 	c.m.Unlock()
@@ -261,16 +264,15 @@ func (c *Cache[K, V]) Refresh(key K, ttl time.Duration) bool {
 func (c *Cache[K, V]) Evict(n int) (evicted int) {
 	c.m.Lock()
 
-	select {
-	case c.stop <- struct{}{}:
-	default:
-	}
-
 	for evicted = 0; evicted < n && c.head != nil && c.delete(c.head.Key); evicted++ {
 	}
 
-	if evicted > 0 && c.head != nil {
-		c.setTimer()
+	if evicted > 0 {
+		if c.head != nil {
+			c.setTimer()
+		} else if c.timer != nil {
+			c.timer.Stop()
+		}
 	}
 
 	c.m.Unlock()
@@ -341,36 +343,39 @@ func (c *Cache[K, V]) Len() int {
 	return len(c.cache)
 }
 
+// setTimer (re)schedules the single expiry timer for the current head.
+// It must be called with c.m held and c.head != nil.
 func (c *Cache[K, V]) setTimer() {
-	select {
-	case c.stop <- struct{}{}:
-	default:
-	}
+	d := time.Until(c.head.Expires)
 
-	go c.ticker(time.NewTimer(time.Until(c.head.Expires)))
-}
+	if c.timer == nil {
+		c.timer = time.AfterFunc(d, c.onTimer)
 
-func (c *Cache[K, V]) ticker(t *time.Timer) {
-	select {
-	case <-t.C:
-	case <-c.stop:
-		t.Stop()
 		return
 	}
 
-	c.m.Lock()
+	c.timer.Reset(d)
+}
 
-	if c.head != nil {
+// onTimer evicts every item that has actually expired and reschedules for
+// the next one. It re-derives all work from live state, so a spurious or
+// stale wake-up (e.g. from a Reset/Stop race) only ever evicts truly
+// expired items and is otherwise a no-op.
+func (c *Cache[K, V]) onTimer() {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	now := time.Now()
+
+	for c.head != nil && !c.head.Expires.After(now) {
 		delete(c.cache, c.head.Key)
 
 		c.remove(c.head)
 	}
 
 	if c.head != nil {
-		c.setTimer()
+		c.timer.Reset(time.Until(c.head.Expires))
 	}
-
-	c.m.Unlock()
 }
 
 func (c *Cache[K, V]) delete(key K) bool {
