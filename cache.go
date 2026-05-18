@@ -9,6 +9,7 @@ type Cache[K comparable, V any] struct {
 	cache map[K]valuePtr[K, V] // Cached items
 	head  *item[K]             // The earliest item to evict, head of the queue
 	tail  *item[K]             // The latest item to evict
+	free  *item[K]             // Recycled nodes, singly linked via Next
 	timer *time.Timer          // Single expiry timer for the head item
 	m     sync.RWMutex
 }
@@ -33,6 +34,20 @@ func New[K comparable, V any]() *Cache[K, V] {
 	}
 }
 
+// NewWithSize creates a new cache instance with the underlying map pre-sized
+// for size entries. Use it when the expected number of items is known up
+// front to avoid incremental map growth and rehashing. A negative size is
+// treated as zero. The cache is not capped; it can still grow beyond size.
+func NewWithSize[K comparable, V any](size int) *Cache[K, V] {
+	if size < 0 {
+		size = 0
+	}
+
+	return &Cache[K, V]{
+		cache: make(map[K]valuePtr[K, V], size),
+	}
+}
+
 // Set adds or replaces the value for key with the given TTL.
 func (c *Cache[K, V]) Set(key K, value V, ttl time.Duration) {
 	c.m.Lock()
@@ -42,9 +57,17 @@ func (c *Cache[K, V]) Set(key K, value V, ttl time.Duration) {
 		c.delete(key)
 	}
 
-	i := &item[K]{
-		Key:     key,
-		Expires: time.Now().Add(ttl),
+	expires := time.Now().Add(ttl)
+
+	i := c.free
+	if i == nil {
+		i = &item[K]{Key: key, Expires: expires}
+	} else {
+		c.free = i.Next
+		i.Prev = nil
+		i.Next = nil
+		i.Key = key
+		i.Expires = expires
 	}
 
 	c.cache[key] = valuePtr[K, V]{
@@ -369,9 +392,12 @@ func (c *Cache[K, V]) onTimer() {
 	now := time.Now()
 
 	for c.head != nil && !c.head.Expires.After(now) {
-		delete(c.cache, c.head.Key)
+		n := c.head
 
-		c.remove(c.head)
+		delete(c.cache, n.Key)
+
+		c.remove(n)
+		c.putItem(n)
 	}
 
 	if c.head != nil {
@@ -393,7 +419,24 @@ func (c *Cache[K, V]) delete(key K) bool {
 
 	delete(c.cache, key)
 
+	c.putItem(value.Ptr)
+
 	return true
+}
+
+// putItem recycles a node that is no longer referenced by the map or queue.
+// It clears the key and expiry so the freed node retains no references (e.g.
+// pointer-bearing keys), then pushes it onto the free list. It must be called
+// with c.m held, and only for nodes that have already been removed from the
+// queue and deleted from the map.
+func (c *Cache[K, V]) putItem(n *item[K]) {
+	var zeroKey K
+
+	n.Key = zeroKey
+	n.Expires = time.Time{}
+	n.Prev = nil
+	n.Next = c.free
+	c.free = n
 }
 
 func (c *Cache[K, V]) remove(n *item[K]) (r *item[K]) {

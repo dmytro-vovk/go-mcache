@@ -44,7 +44,7 @@ func TestCache(t *testing.T) {
 	}, 130*time.Millisecond, 20*time.Millisecond)
 
 	assert.Eventually(t, func() bool {
-		return 0 == c.Len()
+		return c.Len() == 0
 	}, 1100*time.Millisecond, 20*time.Millisecond)
 }
 
@@ -62,7 +62,7 @@ func TestReplace(t *testing.T) {
 	}
 
 	assert.Eventually(t, func() bool {
-		return 0 == c.Len()
+		return c.Len() == 0
 	}, 100*time.Millisecond, 20*time.Millisecond)
 }
 
@@ -99,7 +99,7 @@ func TestDelete(t *testing.T) {
 	assert.False(t, ok)
 
 	assert.Eventually(t, func() bool {
-		return 0 == c.Len()
+		return c.Len() == 0
 	}, 100*time.Millisecond, 20*time.Millisecond)
 }
 
@@ -110,7 +110,7 @@ func TestOrder(t *testing.T) {
 	c.Set(2, 2, 200*time.Millisecond)
 
 	assert.Eventually(t, func() bool {
-		return 1 == c.Len()
+		return c.Len() == 1
 	}, 300*time.Millisecond, 20*time.Millisecond, "remaining %d", c.Len())
 
 	_, ok := c.Get(1)
@@ -121,7 +121,7 @@ func TestOrder(t *testing.T) {
 	}
 
 	assert.Eventually(t, func() bool {
-		return 0 == c.Len()
+		return c.Len() == 0
 	}, 300*time.Millisecond, 20*time.Millisecond, "remaining %d", c.Len())
 }
 
@@ -132,7 +132,7 @@ func TestOrder2(t *testing.T) {
 	c.Set(1, 1, 100*time.Millisecond)
 
 	assert.Eventually(t, func() bool {
-		return 1 == c.Len()
+		return c.Len() == 1
 	}, 250*time.Millisecond, 20*time.Millisecond, "remaining %d", c.Len())
 
 	_, ok := c.Get(1)
@@ -143,7 +143,7 @@ func TestOrder2(t *testing.T) {
 	}
 
 	assert.Eventually(t, func() bool {
-		return 0 == c.Len()
+		return c.Len() == 0
 	}, 250*time.Millisecond, 20*time.Millisecond, "remaining %d", c.Len())
 }
 
@@ -155,7 +155,7 @@ func TestOrder3(t *testing.T) {
 	c.Set(1, 1, 100*time.Millisecond)
 
 	assert.Eventually(t, func() bool {
-		return 2 == c.Len()
+		return c.Len() == 2
 	}, 450*time.Millisecond, 20*time.Millisecond, "remaining %d", c.Len())
 
 	_, ok := c.Get(1)
@@ -166,7 +166,7 @@ func TestOrder3(t *testing.T) {
 	}
 
 	assert.Eventually(t, func() bool {
-		return 0 == c.Len()
+		return c.Len() == 0
 	}, 350*time.Millisecond, 20*time.Millisecond, "remaining %d", c.Len())
 }
 
@@ -188,7 +188,7 @@ func TestRefresh(t *testing.T) {
 	assert.False(t, c.Refresh(100, time.Millisecond))
 
 	assert.Eventually(t, func() bool {
-		return 0 == c.Len()
+		return c.Len() == 0
 	}, 3500*time.Millisecond, 20*time.Millisecond)
 }
 
@@ -205,7 +205,7 @@ func TestRefreshSingleItem(t *testing.T) {
 		assert.Equal(t, 1, c.Len())
 
 		assert.Eventually(t, func() bool {
-			return 0 == c.Len()
+			return c.Len() == 0
 		}, 300*time.Millisecond, 10*time.Millisecond)
 	})
 
@@ -216,7 +216,7 @@ func TestRefreshSingleItem(t *testing.T) {
 		assert.True(t, c.Refresh(1, 30*time.Millisecond))
 
 		assert.Eventually(t, func() bool {
-			return 0 == c.Len()
+			return c.Len() == 0
 		}, 120*time.Millisecond, 10*time.Millisecond)
 	})
 }
@@ -261,7 +261,7 @@ func TestLargeCache(t *testing.T) {
 	}
 
 	assert.Eventually(t, func() bool {
-		return 0 == c.Len()
+		return c.Len() == 0
 	}, 21*time.Second, 20*time.Millisecond)
 }
 
@@ -357,7 +357,7 @@ func TestRekeyExpires(t *testing.T) {
 
 	// The rekeyed entry must still expire on its original TTL.
 	assert.Eventually(t, func() bool {
-		return 0 == c.Len()
+		return c.Len() == 0
 	}, 200*time.Millisecond, 10*time.Millisecond)
 }
 
@@ -379,7 +379,7 @@ func TestRekeyOntoExisting(t *testing.T) {
 
 	// Surviving entry keeps key 1's short TTL; no orphaned queue node.
 	assert.Eventually(t, func() bool {
-		return 0 == c.Len()
+		return c.Len() == 0
 	}, 150*time.Millisecond, 10*time.Millisecond)
 }
 
@@ -444,7 +444,7 @@ func BenchmarkCacheGet(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		if n, ok := c.Get(1); !(ok && n == 1) {
+		if n, ok := c.Get(1); !ok || n != 1 {
 			b.Fail()
 		}
 	}
@@ -462,7 +462,7 @@ func BenchmarkCacheAddGet(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		c.Set(i, i, 50*time.Millisecond)
 
-		if n, ok := c.Get(i); !(ok && n == i) {
+		if n, ok := c.Get(i); !ok || n != i {
 			b.Fail()
 		}
 

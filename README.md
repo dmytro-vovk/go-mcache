@@ -22,6 +22,10 @@ go get github.com/dmytro-vovk/go-mcache
 // Create a new instance with string keys and int values
 c := mcache.New[string, int]()
 
+// When the expected number of items is known up front, pre-size the
+// underlying map to avoid incremental growth and rehashing:
+//   c := mcache.NewWithSize[string, int](10000)
+
 // Set couple values
 c.Set("one", 1, time.Minute)
 c.Set("two", 2, time.Hour)
@@ -79,16 +83,18 @@ if _, ok := c.Get("gone fast"); !ok {
 
 See [examples](examples) directory for more.
 
-## Benchmarks
-```
-goos: darwin
-goarch: amd64
-pkg: github.com/dmytro-vovk/go-mcache
-cpu: Intel(R) Core(TM) i9-8950HK CPU @ 2.90GHz
-BenchmarkCacheSet
-BenchmarkCacheSet-12       	 2389052	       485.8 ns/op	     243 B/op	       2 allocs/op
-BenchmarkCacheGet
-BenchmarkCacheGet-12       	72900222	        15.56 ns/op	       2 B/op	       0 allocs/op
-BenchmarkCacheAddGet
-BenchmarkCacheAddGet-12    	  781284	      1662 ns/op	     607 B/op	      10 allocs/op
+## Performance
+
+`Get` is read-only and allocation-free.
+
+Freed queue nodes are recycled via an internal free list, so steady-state
+workloads that churn keys do not allocate: `Set` followed by `Delete`,
+replacing an existing key, and timer/`Evict` expiry all run at **zero
+allocations per operation** once the free list is warm. A `Set` that grows
+the cache (no node available to reuse) allocates a single node.
+
+Numbers are machine-dependent; run the suite locally:
+
+```sh
+go test -run='^$' -bench=. -benchmem ./...
 ```
